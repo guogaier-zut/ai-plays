@@ -48,6 +48,68 @@ body.theme-neon {
 	--shadow: #031e24;
 }
 
+/* === Pixel UI & Themes (BitReaction-like) === */
+body.theme-classic {
+	--primary-color: #FF6B6B;
+	--secondary-color: #4ECDC4;
+	--accent-color: #FFE66D;
+	--bg-color: #1A1A2E;
+	--text-color: #FFFFFF;
+}
+body.theme-neon {
+	--primary-color: #FF00FF;
+	--secondary-color: #00FFFF;
+	--accent-color: #FFFF00;
+	--bg-color: #0A0A0A;
+	--text-color: #00FF00;
+}
+body.theme-retro {
+	--primary-color: #E84545;
+	--secondary-color: #2B2E4A;
+	--accent-color: #F4A261;
+	--bg-color: #53354A;
+	--text-color: #E9D8A6;
+}
+body.theme-gameboy {
+	--primary-color: #9BBC0F;
+	--secondary-color: #8BAC0F;
+	--accent-color: #306230;
+	--bg-color: #0F380F;
+	--text-color: #9BBC0F;
+}
+
+.pixel-font {
+	font-family: "Courier New", Courier, monospace;
+	font-weight: 700;
+	letter-spacing: 2px;
+	text-rendering: optimizeSpeed;
+	image-rendering: pixelated;
+}
+.pixel-button {
+	font-family: "Courier New", Courier, monospace;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+	border: 4px solid currentColor;
+	box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+	transition: transform 100ms ease, box-shadow 100ms ease, filter 120ms ease;
+	cursor: pointer;
+	image-rendering: pixelated;
+}
+.pixel-button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 rgba(0,0,0,0.3); }
+.pixel-button:active { transform: translate(4px, 4px); box-shadow: none; }
+.pixel-block { border: 3px solid currentColor; box-shadow: inset -3px -3px 0 rgba(0,0,0,0.3); image-rendering: pixelated; }
+
+@keyframes pixelPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+@keyframes pixelBlink { 0%,50%,100%{opacity:1} 25%,75%{opacity:0} }
+@keyframes pixelSlideDown { from{transform:translateY(-100%);opacity:0} to{transform:translateY(0);opacity:1} }
+.animate-pixel-pulse { animation: pixelPulse .5s ease-in-out; }
+.animate-pixel-blink { animation: pixelBlink 1s infinite; }
+.animate-pixel-slide-down { animation: pixelSlideDown .3s ease-out; }
+
+.scanlines { position: relative; overflow: hidden; }
+.scanlines::before { content:""; position:absolute; inset:0; background:linear-gradient(to bottom, rgba(255,255,255,0) 50%, rgba(0,0,0,0.05) 50%); background-size:100% 4px; pointer-events:none; z-index:1; }
+
 /* Base */
 * { box-sizing: border-box; }
 html, body {
@@ -61,6 +123,7 @@ body { margin: 0; }
 .app-header {
 	padding: 24px 16px 8px;
 	text-align: center;
+	position: relative;
 }
 .title {
 	display: inline-block;
@@ -155,6 +218,36 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 	line-height: 1.4;
 }
 
+/* Header settings button */
+.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border: 0;
+	border-radius: 6px;
+	background: linear-gradient(180deg, #18261f, #0d1b14);
+	color: var(--text);
+	cursor: pointer;
+	box-shadow:
+		0 0 0 2px #07140e inset,
+		0 0 0 4px #143226 inset,
+		0 6px 0 0 var(--shadow);
+	transition: filter 120ms ease, transform 120ms ease;
+}
+.icon-btn:hover { filter: brightness(1.08); }
+.icon-btn:active { transform: translateY(2px); box-shadow:
+	0 0 0 2px #07140e inset,
+	0 0 0 4px #143226 inset,
+	0 4px 0 0 var(--shadow);
+}
+.settings-btn {
+	position: absolute;
+	right: 16px;
+	top: 16px;
+}
+
 /* Leaderboard */
 .leaderboard .board-list {
 	margin: 0;
@@ -182,7 +275,34 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 	border-radius: 6px;
 	overflow: hidden;
 }
-.hidden { display: none; }
+.hidden { display: none !important; }
+
+/* Test overlay */
+.test-overlay {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+}
+.test-overlay .countdown {
+	font-size: 56px;
+	font-weight: 900;
+	letter-spacing: 2px;
+	padding: 8px 16px;
+	color: #04150a;
+	background: var(--accent);
+	border-radius: 6px;
+	box-shadow:
+		0 0 0 2px #062012 inset,
+		0 0 0 4px #0e2b1c inset;
+	animation: pop 300ms ease-out both;
+}
+.test-overlay .tip {
+	margin-top: 8px;
+	color: var(--muted);
+	font-size: 14px;
+}
 
 /* HUD */
 .hud {
@@ -409,4 +529,39 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 		max-width: 94vw;
 	}
 }
+
+/* HUD top bar override to match BitReaction */
+.hud { top: 0; left: 0; right: 0; padding: 10px 12px; background: rgba(0,0,0,0.3); }
+.timer { color: var(--bg-color); background: var(--accent-color, var(--accent)); box-shadow: 0 0 0 2px rgba(0,0,0,0.4) inset, 0 0 0 4px rgba(0,0,0,0.5) inset; }
+.stats { color: var(--text-color); }
+.switch { color: var(--text-color); }
+
+/* Make targets use pixel-block look optionally by adding both classes */
+.target.pixel-block { background: var(--primary-color, var(--accent-weak)); border-radius: 0; }
+
+
+/* === Home Hero minimal layout === */
+.pixel-button { border-radius: 0; }
+.hero { display: grid; place-items: center; padding: 24px 12px; }
+.hero-title { text-align: center; margin: 8px 0 16px; }
+.hero-h1 { font-size: clamp(48px, 8vw, 112px); color: var(--primary-color); text-shadow: 4px 4px 0 rgba(0,0,0,0.3); margin: 0 0 8px; }
+.hero-h2 { font-size: clamp(36px, 6vw, 72px); color: var(--secondary-color); text-shadow: 3px 3px 0 rgba(0,0,0,0.3); margin: 0; }
+.hero-dots { display: flex; gap: 8px; justify-content: center; margin: 12px 0 8px; }
+.hero-dots span { width: 10px; height: 10px; background: var(--accent-color); box-shadow: 2px 2px 0 rgba(0,0,0,0.35); }
+.hero-actions { display: grid; gap: 16px; justify-items: center; margin-top: 8px; }
+.hero-btn { width: min(560px, 88vw); height: 80px; font-size: 24px; letter-spacing: 2px; color: var(--bg-color); background: var(--primary-color); border-color: var(--primary-color); }
+.hero-btn:nth-child(2) { background: var(--secondary-color); border-color: var(--secondary-color); }
+.hero-btn:nth-child(3) { background: var(--accent-color); border-color: var(--accent-color); }
+/* subtle horizontal texture */
+.hero-btn { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 2px, transparent 2px, transparent 6px); }
+
+@media (max-width: 480px) {
+	.hero-btn { height: 68px; font-size: 20px; width: 92vw; }
+}
+
+/* Leaderboard full-width page */
+#leaderboard-page { grid-column: 1 / -1; }
+
+/* Center the home hero and remove panel chrome */
+#ui-panel { grid-column: 1 / -1; background: transparent; border: 0; box-shadow: none; border-radius: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
 

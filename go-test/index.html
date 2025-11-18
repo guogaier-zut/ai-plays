@@ -6,62 +6,55 @@
 	<title>8‑Bit 反应力训练</title>
 	<link rel="stylesheet" href="./styles.css" />
 </head>
-<body class="theme-green">
-	<header class="app-header">
-		<h1 class="title slideDown">8‑Bit 反应力训练</h1>
-	</header>
-
+<body class="theme-classic">
 	<main class="container">
 		<section id="ui-panel" class="panel fadeIn">
-			<h2 class="panel-title">游戏设置</h2>
-			<div class="form-row">
-				<label for="target-count">目标数 (1–10)：</label>
-				<input id="target-count" type="number" min="1" max="10" value="5" />
+			<div class="hero">
+				<div class="hero-title">
+					<h1 class="pixel-font hero-h1 animate-pixel-slide-down">REACTION</h1>
+					<h2 class="pixel-font hero-h2 animate-pixel-pulse">TRAINER</h2>
+					<div class="hero-dots"><span></span><span></span><span></span><span></span></div>
+				</div>
+				<div class="hero-actions">
+					<button id="start-btn" class="pixel-button hero-btn">🎯&nbsp;&nbsp;训练模式</button>
+					<button id="test-btn" class="pixel-button hero-btn">⚡&nbsp;&nbsp;测试模式</button>
+					<button id="leaderboard-btn" class="pixel-button hero-btn">🏆&nbsp;&nbsp;排行榜</button>
+					<button id="open-settings-btn" class="pixel-button hero-btn">⚙&nbsp;&nbsp;设置</button>
+				</div>
+				<p class="note pixel-font" style="text-align:center; margin-top:16px;">[ 点击方块，训练你的反应速度 ]</p>
 			</div>
-			<div class="form-row">
-				<label for="difficulty">难度：</label>
-				<select id="difficulty">
-					<option value="5">新手（5 秒）</option>
-					<option value="3">熟练（3 秒）</option>
-					<option value="1">全村最快（1 秒）</option>
-				</select>
-			</div>
-			<div class="form-row">
-				<label for="theme">配色主题：</label>
-				<select id="theme">
-					<option value="green">黑绿</option>
-					<option value="red">红灰</option>
-					<option value="neon">荧光</option>
-				</select>
-			</div>
-			<div class="actions">
-				<button id="start-btn" class="btn btn-primary blink">开始游戏</button>
-			</div>
-			<p class="note">当前版本未实现：计时与结束、命中统计、暂停/继续/重启、结果模态框、音效与排行榜逻辑、移动端专门优化。</p>
 		</section>
 
-		<section id="leaderboard" class="panel leaderboard">
-			<h2 class="panel-title">排行榜</h2>
-			<ol id="board-list" class="board-list"><li class="placeholder">暂无数据</li></ol>
+		<section id="leaderboard-page" class="panel hidden" aria-label="排行榜页面">
+			<h2 class="panel-title pixel-font" style="font-size:24px;">排行榜</h2>
+			<ol id="lb-list" class="board-list"><li class="placeholder">暂无数据</li></ol>
+			<div class="result-actions" style="margin-top:12px">
+				<button id="lb-back-btn" class="btn pixel-button">返回首页</button>
+			</div>
 		</section>
 
-		<section id="game-area" class="game-area hidden" aria-label="游戏区域">
+		<section id="game-area" class="game-area hidden scanlines" aria-label="游戏区域">
 			<div id="hud" class="hud">
-				<div id="timer" class="timer" aria-live="polite">00:05</div>
-				<div class="stats">
+				<div id="timer" class="timer pixel-font" aria-live="polite">00:30</div>
+				<div class="stats pixel-font">
 					<span id="hits">0</span> 命中 /
 					<span id="misses">0</span> 失误 /
 					命中率 <span id="accuracy">0%</span>
 				</div>
 				<div class="controls">
-					<button id="pause-btn" class="btn btn-secondary">暂停</button>
-					<button id="resume-btn" class="btn btn-secondary hidden">继续</button>
-					<button id="restart-btn" class="btn btn-danger">重启</button>
+					<button id="pause-btn" class="btn btn-secondary pixel-button">暂停</button>
+					<button id="resume-btn" class="btn btn-secondary hidden pixel-button">继续</button>
+					<button id="restart-btn" class="btn btn-danger pixel-button">重启</button>
+					<button id="home-btn" class="btn pixel-button">🏠 首页</button>
 					<label class="switch">
 						<input id="sound-toggle" type="checkbox" checked />
 						<span>音效</span>
 					</label>
 				</div>
+			</div>
+			<div id="test-overlay" class="test-overlay hidden" aria-hidden="true">
+				<div id="test-countdown" class="countdown pixel-font animate-pixel-pulse">3</div>
+				<div id="test-tip" class="tip hidden pixel-font animate-pixel-blink">[ 准备... ]</div>
 			</div>
 		</section>
 		<div id="result-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
@@ -91,9 +84,45 @@
 			<h3 id="pause-title">已暂停</h3>
 			<div class="result-actions">
 				<div class="buttons">
-					<button id="pause-continue-btn" class="btn btn-secondary">继续游戏</button>
-					<button id="pause-exit-btn" class="btn btn-danger">返回首页</button>
+					<button id="pause-continue-btn" class="btn btn-secondary pixel-button">继续游戏</button>
+					<button id="pause-exit-btn" class="btn btn-danger pixel-button">返回首页</button>
 				</div>
+			</div>
+		</div>
+		<div id="test-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+		<div id="test-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="test-title">
+			<h3 id="test-title">反应测试结果</h3>
+			<ol id="test-list" class="board-list"></ol>
+			<div style="margin-top:8px;color:var(--muted)">平均反应时间：<span id="test-avg">N/A</span></div>
+			<div class="result-actions" style="margin-top:10px">
+				<div class="buttons">
+					<button id="test-retry-btn" class="btn btn-secondary">再测一次</button>
+					<button id="test-exit-btn" class="btn">返回首页</button>
+				</div>
+			</div>
+		</div>
+		<div id="settings-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+		<div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+			<h3 id="settings-title">设置</h3>
+			<div class="form-row">
+				<label for="settings-theme">主题</label>
+				<select id="settings-theme">
+					<option value="classic">经典</option>
+					<option value="neon">霓虹</option>
+					<option value="retro">复古</option>
+					<option value="gameboy">GameBoy</option>
+				</select>
+			</div>
+			<div class="form-row">
+				<label for="settings-difficulty">难度</label>
+				<select id="settings-difficulty">
+					<option value="easy">简单（3 块）</option>
+					<option value="medium">中等（5 块）</option>
+					<option value="hard">困难（8 块）</option>
+				</select>
+			</div>
+			<div class="result-actions" style="margin-top:10px">
+				<button id="settings-close-btn" class="btn pixel-button">完成</button>
 			</div>
 		</div>
 	</main>

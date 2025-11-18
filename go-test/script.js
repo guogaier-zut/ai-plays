@@ -20,6 +20,7 @@
 	const hitsEl = document.getElementById('hits');
 	const missesEl = document.getElementById('misses');
 	const accuracyEl = document.getElementById('accuracy');
+	const statsBox = document.querySelector('.stats');
 	const pauseBtn = document.getElementById('pause-btn');
 	const resumeBtn = document.getElementById('resume-btn');
 	const restartBtn = document.getElementById('restart-btn');
@@ -41,8 +42,43 @@
 	const pauseModal = document.getElementById('pause-modal');
 	const pauseContinueBtn = document.getElementById('pause-continue-btn');
 	const pauseExitBtn = document.getElementById('pause-exit-btn');
+	const homeBtn = document.getElementById('home-btn');
+	/** Settings & Test controls */
+	const settingsBtn = document.getElementById('settings-btn');
+	const settingsBackdrop = document.getElementById('settings-backdrop');
+	const settingsModal = document.getElementById('settings-modal');
+	const settingsTheme = /** @type {HTMLSelectElement} */(document.getElementById('settings-theme'));
+	const settingsDifficulty = /** @type {HTMLSelectElement} */(document.getElementById('settings-difficulty'));
+	const settingsCloseBtn = document.getElementById('settings-close-btn');
+	const testBtn = document.getElementById('test-btn');
+	const openSettingsBtn = document.getElementById('open-settings-btn');
+	const testOverlay = document.getElementById('test-overlay');
+	const testCountdownEl = document.getElementById('test-countdown');
+	const testTipEl = document.getElementById('test-tip');
+	const testBackdrop = document.getElementById('test-backdrop');
+	const testModal = document.getElementById('test-modal');
+	const testList = document.getElementById('test-list');
+	const testAvg = document.getElementById('test-avg');
+	const testRetryBtn = document.getElementById('test-retry-btn');
+	const testExitBtn = document.getElementById('test-exit-btn');
+
+	// Testing state
+	let isTesting = false;
+	let testTrial = 0; // 1..5
+	/** @type {{trial:number,status:'hit'|'miss'|'premature',reactionMs?:number}[]} */
+	let testResults = [];
+	/** @type {'idle'|'countdown'|'waiting'|'visible'} */
+	let testPhase = 'idle';
+	let testAppearTs = 0;
+	let testDelayTimer = 0, testHideTimer = 0, testCountdownTimer = 0;
+	let testDelayAt = 0, testHideAt = 0;
+	let testRemainingDelay = 0, testRemainingHide = 0;
+	let testCountdownRemaining = 0;
 	/** Leaderboard */
-	const boardList = document.getElementById('board-list');
+	const leaderboardBtn = document.getElementById('leaderboard-btn');
+	const leaderboardPage = document.getElementById('leaderboard-page');
+	const lbBackBtn = document.getElementById('lb-back-btn');
+	const boardList = document.getElementById('lb-list') || document.getElementById('board-list');
 	/** SFX */
 	const sfxHit = /** @type {HTMLAudioElement} */ (document.getElementById('sfx-hit'));
 	const sfxPop = /** @type {HTMLAudioElement} */ (document.getElementById('sfx-pop'));
@@ -70,20 +106,15 @@
 		return Math.max(min, Math.min(max, num));
 	}
 
-	function applyTheme(themeKey) {
+	function applyVisualStyle(styleKey) {
 		const body = document.body;
-		body.classList.remove('theme-green', 'theme-red', 'theme-neon');
-		switch (themeKey) {
-			case 'red':
-				body.classList.add('theme-red');
-				break;
-			case 'neon':
-				body.classList.add('theme-neon');
-				break;
-			case 'green':
-			default:
-				body.classList.add('theme-green');
-				break;
+		body.classList.remove('theme-classic','theme-neon','theme-retro','theme-gameboy','theme-green','theme-red','theme-neon');
+		switch (styleKey) {
+			case 'neon': body.classList.add('theme-neon'); break;
+			case 'retro': body.classList.add('theme-retro'); break;
+			case 'gameboy': body.classList.add('theme-gameboy'); break;
+			case 'classic':
+			default: body.classList.add('theme-classic'); break;
 		}
 	}
 
@@ -146,10 +177,19 @@
 
 	function spawnTargetsToDesiredCount() {
 		if (!isRunning) return;
-		const current = gameArea.querySelectorAll('.target').length;
-		for (let i = current; i < desiredTargetCount; i++) {
-			const t = createTarget();
-			gameArea.appendChild(t);
+		const nodes = Array.from(gameArea.querySelectorAll('.target'));
+		const current = nodes.length;
+		if (current < desiredTargetCount) {
+			for (let i = current; i < desiredTargetCount; i++) {
+				const t = createTarget();
+				gameArea.appendChild(t);
+			}
+		} else if (current > desiredTargetCount) {
+			// remove extras from the end
+			for (let i = 0; i < current - desiredTargetCount; i++) {
+				const el = nodes[nodes.length - 1 - i];
+				if (el && el.parentElement) el.parentElement.removeChild(el);
+			}
 		}
 	}
 
@@ -157,11 +197,11 @@
 		gameArea.querySelectorAll('.target').forEach((el) => el.remove());
 	}
 
-	function mapDifficultyToTTL() {
-		const v = selectDifficulty.value;
-		if (v === '1') return 1000;
-		if (v === '3') return 3000;
-		return 5000;
+	function mapDifficultyToBlockCount() {
+		const v = selectDifficulty ? selectDifficulty.value : 'medium';
+		if (v === 'easy') return 3;
+		if (v === 'hard') return 8;
+		return 5; // medium
 	}
 
 	function updateTimerUI(ms) {
@@ -217,7 +257,7 @@
 	function startGameWithTimer() {
 		isRunning = true;
 		isPaused = false;
-		ttlMs = mapDifficultyToTTL();
+		ttlMs = 2000;
 		hitCount = 0;
 		missCount = 0;
 		totalClicks = 0;
@@ -225,19 +265,23 @@
 		uiPanel.classList.add('hidden');
 		gameArea.classList.remove('hidden');
 		remainingMs = ROUND_MS;
-		updateTimerUI(remainingMs);
-		desiredTargetCount = clamp(parseInt(inputTargetCount.value || '5', 10), 1, 10);
+		updateTimerUI(ROUND_MS);
+		desiredTargetCount = mapDifficultyToBlockCount();
 		clearAllTargets();
 		spawnTargetsToDesiredCount();
 		gameStartTs = performance.now();
 		rafId = requestAnimationFrame(tick);
+		// ensure HUD stats & timer visible in training mode
+		if (statsBox) statsBox.classList.remove('hidden');
+		if (timerEl) timerEl.classList.remove('hidden');
+		if (restartBtn) restartBtn.classList.remove('hidden');
 	}
 
 	function difficultyMultiplier() {
-		const v = selectDifficulty.value;
-		if (v === '1') return 3;
-		if (v === '3') return 2;
-		return 1;
+		const v = selectDifficulty ? selectDifficulty.value : 'medium';
+		if (v === 'hard') return 3;
+		if (v === 'medium') return 2;
+		return 1; // easy
 	}
 
 	function endGame() {
@@ -258,33 +302,83 @@
 	}
 
 	function pauseGame() {
-		if (!isRunning || isPaused) return;
+		if ((!isRunning && !isTesting) || isPaused) return;
 		isPaused = true;
 		cancelAnimationFrame(rafId);
 		pauseStartedAt = performance.now();
-		// switch buttons
+		// training: switch buttons
 		pauseBtn.classList.add('hidden');
 		resumeBtn.classList.remove('hidden');
+		// testing timers pause
+		if (isTesting) {
+			if (testPhase === 'waiting' && testDelayTimer) {
+				const now = performance.now();
+				testRemainingDelay = Math.max(0, testDelayAt - now);
+				clearTimeout(testDelayTimer); testDelayTimer = 0;
+			}
+			if (testPhase === 'visible' && testHideTimer) {
+				const now = performance.now();
+				testRemainingHide = Math.max(0, testHideAt - now);
+				clearTimeout(testHideTimer); testHideTimer = 0;
+			}
+			if (testPhase === 'countdown' && testCountdownTimer) {
+				clearInterval(testCountdownTimer); testCountdownTimer = 0;
+			}
+		}
 		openPauseModal();
 	}
 
 	function resumeGame() {
-		if (!isRunning || !isPaused) return;
+		if ((!isRunning && !isTesting) || !isPaused) return;
 		isPaused = false;
-		// Re-anchor start time using remainingMs
 		const now = performance.now();
 		const pauseDelta = now - pauseStartedAt;
-		gameStartTs = now - (ROUND_MS - remainingMs);
-		// shift createdAt for all existing targets so TTL is not consumed during pause
-		gameArea.querySelectorAll('.target').forEach((el) => {
-			const createdAt = targetCreatedAt.get(el);
-			if (createdAt != null) {
-				targetCreatedAt.set(el, createdAt + pauseDelta);
+		if (isRunning) {
+			// Re-anchor start time using remainingMs
+			gameStartTs = now - (ROUND_MS - remainingMs);
+			// shift createdAt for all existing targets so TTL is not consumed during pause
+			gameArea.querySelectorAll('.target').forEach((el) => {
+				const createdAt = targetCreatedAt.get(el);
+				if (createdAt != null) {
+					targetCreatedAt.set(el, createdAt + pauseDelta);
+				}
+			});
+			rafId = requestAnimationFrame(tick);
+		}
+		// testing timers resume
+		if (isTesting) {
+			if (testPhase === 'waiting' && testRemainingDelay > 0) {
+				testDelayAt = performance.now() + testRemainingDelay;
+				testDelayTimer = setTimeout(showTestBlock, testRemainingDelay);
+				testRemainingDelay = 0;
 			}
-		});
+			if (testPhase === 'visible' && testRemainingHide > 0) {
+				testHideAt = performance.now() + testRemainingHide;
+				testHideTimer = setTimeout(onTestMiss, testRemainingHide);
+				testRemainingHide = 0;
+			}
+			if (testPhase === 'countdown' && testCountdownRemaining > 0 && !testCountdownTimer) {
+				// resume numeric countdown
+				if (testCountdownEl) testCountdownEl.textContent = String(testCountdownRemaining);
+				testCountdownTimer = setInterval(() => {
+					if (isPaused) return;
+					testCountdownRemaining--;
+					if (testCountdownRemaining <= 0) {
+						clearInterval(testCountdownTimer); testCountdownTimer = 0;
+						if (testCountdownEl) { testCountdownEl.textContent = ''; testCountdownEl.classList.add('hidden'); }
+						testPhase = 'waiting';
+						const delay = 100 + Math.floor(Math.random() * 2901);
+						testDelayAt = performance.now() + delay;
+						testDelayTimer = setTimeout(showTestBlock, delay);
+						if (testOverlay) testOverlay.classList.remove('hidden');
+					} else {
+						if (testCountdownEl) testCountdownEl.textContent = String(testCountdownRemaining);
+					}
+				}, 1000);
+			}
+		}
 		pauseBtn.classList.remove('hidden');
 		resumeBtn.classList.add('hidden');
-		rafId = requestAnimationFrame(tick);
 	}
 
 	function exitToHome() {
@@ -309,6 +403,9 @@
 		// reset buttons state
 		pauseBtn.classList.remove('hidden');
 		resumeBtn.classList.add('hidden');
+		if (timerEl) timerEl.classList.remove('hidden');
+		if (statsBox) statsBox.classList.remove('hidden');
+		if (restartBtn) restartBtn.classList.remove('hidden');
 	}
 
 	function restartGame() {
@@ -339,6 +436,144 @@
 		pauseBackdrop.classList.add('hidden');
 		pauseModal.classList.add('hidden');
 		pauseBackdrop.setAttribute('aria-hidden', 'true');
+	}
+
+	// Reaction Test helpers
+	function clearTestTimers() {
+		if (testDelayTimer) { clearTimeout(testDelayTimer); testDelayTimer = 0; }
+		if (testHideTimer) { clearTimeout(testHideTimer); testHideTimer = 0; }
+		if (testCountdownTimer) { clearInterval(testCountdownTimer); testCountdownTimer = 0; }
+	}
+	function closeTestResultModal() {
+		testBackdrop.classList.add('hidden');
+		testModal.classList.add('hidden');
+		testBackdrop.setAttribute('aria-hidden', 'true');
+	}
+	function openTestResultModal() {
+		// render list
+		if (testList) {
+			testList.innerHTML = '';
+			for (let i = 0; i < testResults.length; i++) {
+				const r = testResults[i];
+				const li = document.createElement('li');
+				let text = `第 ${r.trial} 次：`;
+				if (r.status === 'hit') text += `命中（${Math.round(r.reactionMs || 0)} ms）`;
+				else if (r.status === 'premature') text += '提前点击';
+				else text += '未命中';
+				li.textContent = text;
+				testList.appendChild(li);
+			}
+		}
+		// average
+		const hits = testResults.filter(r => r.status === 'hit' && typeof r.reactionMs === 'number');
+		const avg = hits.length ? Math.round(hits.reduce((s, r) => s + (r.reactionMs || 0), 0) / hits.length) : null;
+		if (testAvg) testAvg.textContent = hits.length ? `${avg} ms` : 'N/A';
+		testBackdrop.classList.remove('hidden');
+		testModal.classList.remove('hidden');
+		testBackdrop.setAttribute('aria-hidden', 'false');
+	}
+	function resetTestState() {
+		isTesting = false;
+		testTrial = 0;
+		testResults = [];
+		testPhase = 'idle';
+		testAppearTs = 0;
+		clearTestTimers();
+		if (testOverlay) testOverlay.classList.add('hidden');
+		if (testCountdownEl) testCountdownEl.textContent = '3';
+		if (testTipEl) testTipEl.classList.add('hidden');
+		// remove any test block
+		const tb = gameArea.querySelector('.target.test');
+		if (tb) tb.remove();
+	}
+	function runNextTestTrial() {
+		clearTestTimers();
+		// remove leftover block
+		const tb = gameArea.querySelector('.target.test');
+		if (tb) tb.remove();
+		if (testTrial >= 5) {
+			openTestResultModal();
+			return;
+		}
+		testTrial++;
+		if (testTrial === 1) {
+			// First trial: show numeric countdown 3->2->1
+			testPhase = 'countdown';
+			if (testOverlay) testOverlay.classList.remove('hidden');
+			if (testTipEl) testTipEl.classList.add('hidden');
+			if (testCountdownEl) {
+				testCountdownEl.classList.remove('hidden');
+				testCountdownRemaining = 3;
+				testCountdownEl.textContent = String(testCountdownRemaining);
+			}
+			testCountdownTimer = setInterval(() => {
+				if (isPaused) return; // paused, wait
+				testCountdownRemaining--;
+				if (testCountdownRemaining <= 0) {
+					clearInterval(testCountdownTimer); testCountdownTimer = 0;
+					if (testCountdownEl) { testCountdownEl.textContent = ''; testCountdownEl.classList.add('hidden'); }
+					// switch to waiting and schedule block after random delay
+					testPhase = 'waiting';
+					const delay = 100 + Math.floor(Math.random() * 2901);
+					testDelayAt = performance.now() + delay;
+					testDelayTimer = setTimeout(showTestBlock, delay);
+					if (testOverlay) testOverlay.classList.remove('hidden'); // keep overlay until block shows
+				} else {
+					if (testCountdownEl) testCountdownEl.textContent = String(testCountdownRemaining);
+				}
+			}, 1000);
+		} else {
+			// Subsequent trials: no countdown
+			testPhase = 'waiting';
+			if (testCountdownEl) { testCountdownEl.textContent = ''; testCountdownEl.classList.add('hidden'); }
+			if (testTipEl) testTipEl.classList.add('hidden');
+			const delay = 100 + Math.floor(Math.random() * 2901);
+			testDelayAt = performance.now() + delay;
+			testDelayTimer = setTimeout(showTestBlock, delay);
+		}
+	}
+	function showTestBlock() {
+		if (!isTesting) return;
+		testPhase = 'visible';
+		const div = document.createElement('div');
+		div.className = 'target test';
+		const { left, top } = getRandomPositionWithinArea();
+		div.style.left = left + 'px';
+		div.style.top = top + 'px';
+		gameArea.appendChild(div);
+		testAppearTs = performance.now();
+		if (testTipEl) testTipEl.classList.add('hidden');
+		if (testOverlay) testOverlay.classList.add('hidden');
+		div.addEventListener('click', () => {
+			if (!isTesting || testPhase !== 'visible') return;
+			const reaction = performance.now() - testAppearTs;
+			testResults.push({ trial: testTrial, status: 'hit', reactionMs: reaction });
+			div.classList.add('hit');
+			setTimeout(() => { if (div.parentElement) div.remove(); runNextTestTrial(); }, 180);
+		});
+		const life = 5000;
+		testHideAt = performance.now() + life;
+		testHideTimer = setTimeout(onTestMiss, life);
+	}
+	function onTestMiss() {
+		if (!isTesting || testPhase !== 'visible') return;
+		testResults.push({ trial: testTrial, status: 'miss' });
+		const tb = gameArea.querySelector('.target.test');
+		if (tb) tb.remove();
+		runNextTestTrial();
+	}
+	function startReactionTest() {
+		if (isRunning) exitToHome();
+		isTesting = true;
+		// keep HUD visible so Home button is available
+		if (timerEl) timerEl.classList.add('hidden');
+		if (statsBox) statsBox.classList.add('hidden');
+		if (restartBtn) restartBtn.classList.add('hidden');
+		uiPanel.classList.add('hidden');
+		gameArea.classList.remove('hidden');
+		testTrial = 0;
+		testResults = [];
+		runNextTestTrial();
 	}
 
 	function loadLeaderboard() {
@@ -382,32 +617,74 @@
 		});
 	}
 
-	// Wire up UI
-	selectTheme.addEventListener('change', (e) => {
-		const val = /** @type {HTMLSelectElement} */ (e.target).value;
-		applyTheme(val);
-	});
-	// Apply initial theme
-	applyTheme(selectTheme.value);
+	function openLeaderboardPage() {
+		uiPanel.classList.add('hidden');
+		gameArea.classList.add('hidden');
+		leaderboardPage.classList.remove('hidden');
+		renderLeaderboard();
+	}
 
-	inputTargetCount.addEventListener('input', () => {
-		const n = clamp(parseInt(inputTargetCount.value || '0', 10), 1, 10);
-		if (String(n) !== inputTargetCount.value) {
-			// normalize display
-			inputTargetCount.value = String(n);
+	function closeLeaderboardPage() {
+		leaderboardPage.classList.add('hidden');
+		if (!isRunning && !isTesting) {
+			uiPanel.classList.remove('hidden');
+		} else if (isRunning) {
+			gameArea.classList.remove('hidden');
 		}
-		desiredTargetCount = n;
-		// If game already running, adjust on the fly
-		if (isRunning) {
+	}
+
+	// Settings modal helpers
+	function openSettingsModal() {
+		settingsBackdrop.classList.remove('hidden');
+		settingsModal.classList.remove('hidden');
+		settingsBackdrop.setAttribute('aria-hidden', 'false');
+		// sync current values
+		if (settingsDifficulty && selectDifficulty) settingsDifficulty.value = selectDifficulty.value;
+		if (settingsTheme) {
+			// no-op, theme already applied
+		}
+	}
+	function closeSettingsModal() {
+		settingsBackdrop.classList.add('hidden');
+		settingsModal.classList.add('hidden');
+		settingsBackdrop.setAttribute('aria-hidden', 'true');
+	}
+
+	// Wire up UI
+	if (selectTheme) {
+		selectTheme.addEventListener('change', (e) => {
+			const val = /** @type {HTMLSelectElement} */ (e.target).value;
+			applyVisualStyle(val);
+		});
+	}
+	// Apply initial theme from any available selector
+	{
+		const initialTheme = (settingsTheme && settingsTheme.value) || 'classic';
+		applyVisualStyle(initialTheme);
+	}
+
+	if (inputTargetCount) {
+		inputTargetCount.addEventListener('input', () => {
+			const n = clamp(parseInt(inputTargetCount.value || '0', 10), 1, 10);
+			if (String(n) !== inputTargetCount.value) {
+				inputTargetCount.value = String(n);
+			}
+			desiredTargetCount = n;
+			if (isRunning) spawnTargetsToDesiredCount();
+		});
+		desiredTargetCount = clamp(parseInt(inputTargetCount.value || '5', 10), 1, 10);
+	} else {
+		desiredTargetCount = 5;
+	}
+
+	// Difficulty now affects concurrent blocks (3/5/8)
+	if (selectDifficulty) selectDifficulty.addEventListener('change', () => {
+		if (!isRunning) {
+			updateTimerUI(ROUND_MS);
+		} else {
+			desiredTargetCount = mapDifficultyToBlockCount();
 			spawnTargetsToDesiredCount();
 		}
-	});
-	desiredTargetCount = clamp(parseInt(inputTargetCount.value || '5', 10), 1, 10);
-
-	// Difficulty now affects duration
-	selectDifficulty.addEventListener('change', () => {
-		ttlMs = mapDifficultyToTTL();
-		if (!isRunning) updateTimerUI(ROUND_MS);
 	});
 
 	startBtn.addEventListener('click', () => {
@@ -422,8 +699,24 @@
 
 	// Miss capture: click in game area but not on target or control
 	gameArea.addEventListener('click', (e) => {
-		if (!isRunning || isPaused) return;
 		const t = /** @type {HTMLElement} */ (e.target);
+		// Testing branch
+		if (isTesting) {
+			if (testPhase === 'waiting') {
+				// premature click
+				if (testDelayTimer) { clearTimeout(testDelayTimer); testDelayTimer = 0; }
+				testResults.push({ trial: testTrial, status: 'premature' });
+				// advance to next trial immediately
+				// ensure no stray test block exists
+				const tb = gameArea.querySelector('.target.test');
+				if (tb) tb.remove();
+				runNextTestTrial();
+			}
+			// clicks elsewhere during visible/non-visible are ignored here (handled by block listener)
+			return;
+		}
+		// Normal game branch
+		if (!isRunning || isPaused) return;
 		if (t.classList.contains('target')) return;
 		if (t.closest && t.closest('.controls')) return;
 		missCount++;
@@ -435,6 +728,7 @@
 	if (pauseBtn) pauseBtn.addEventListener('click', pauseGame);
 	if (resumeBtn) resumeBtn.addEventListener('click', resumeGame);
 	if (restartBtn) restartBtn.addEventListener('click', restartGame);
+	if (homeBtn) homeBtn.addEventListener('click', exitToHome);
 	// Pause modal actions
 	if (pauseContinueBtn) pauseContinueBtn.addEventListener('click', () => {
 		closePauseModal();
@@ -464,6 +758,44 @@
 	});
 	if (closeResultBtn) closeResultBtn.addEventListener('click', closeResultModal);
 	if (resultBackdrop) resultBackdrop.addEventListener('click', closeResultModal);
+
+	// Test entry & modal actions
+	if (testBtn) testBtn.addEventListener('click', startReactionTest);
+	if (testRetryBtn) testRetryBtn.addEventListener('click', () => {
+		closeTestResultModal();
+		resetTestState();
+		startReactionTest();
+	});
+	if (testExitBtn) testExitBtn.addEventListener('click', () => {
+		closeTestResultModal();
+		resetTestState();
+		// return home UI
+		uiPanel.classList.remove('hidden');
+		gameArea.classList.add('hidden');
+		hud.classList.remove('hidden');
+		if (timerEl) timerEl.classList.remove('hidden');
+		if (statsBox) statsBox.classList.remove('hidden');
+	});
+
+	// Settings modal
+	if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
+	if (openSettingsBtn) openSettingsBtn.addEventListener('click', openSettingsModal);
+	if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', closeSettingsModal);
+	if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
+	if (settingsTheme) settingsTheme.addEventListener('change', () => {
+		applyVisualStyle(settingsTheme.value);
+	});
+	// Leaderboard page
+	if (leaderboardBtn) leaderboardBtn.addEventListener('click', openLeaderboardPage);
+	if (lbBackBtn) lbBackBtn.addEventListener('click', closeLeaderboardPage);
+	if (settingsDifficulty) settingsDifficulty.addEventListener('change', () => {
+		if (selectDifficulty) selectDifficulty.value = settingsDifficulty.value;
+		if (!isRunning) updateTimerUI(ROUND_MS);
+		else {
+			desiredTargetCount = mapDifficultyToBlockCount();
+			spawnTargetsToDesiredCount();
+		}
+	});
 
 	// SFX toggle
 	if (soundToggle) {
