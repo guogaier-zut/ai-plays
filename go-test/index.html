@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>8‑Bit 反应力训练</title>
+	<link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="theme-green">
+	<header class="app-header">
+		<h1 class="title slideDown">8‑Bit 反应力训练</h1>
+	</header>
+
+	<main class="container">
+		<section id="ui-panel" class="panel fadeIn">
+			<h2 class="panel-title">游戏设置</h2>
+			<div class="form-row">
+				<label for="target-count">目标数 (1–10)：</label>
+				<input id="target-count" type="number" min="1" max="10" value="5" />
+			</div>
+			<div class="form-row">
+				<label for="difficulty">难度：</label>
+				<select id="difficulty">
+					<option value="5">新手（5 秒）</option>
+					<option value="3">熟练（3 秒）</option>
+					<option value="1">全村最快（1 秒）</option>
+				</select>
+			</div>
+			<div class="form-row">
+				<label for="theme">配色主题：</label>
+				<select id="theme">
+					<option value="green">黑绿</option>
+					<option value="red">红灰</option>
+					<option value="neon">荧光</option>
+				</select>
+			</div>
+			<div class="actions">
+				<button id="start-btn" class="btn btn-primary blink">开始游戏</button>
+			</div>
+			<p class="note">当前版本未实现：计时与结束、命中统计、暂停/继续/重启、结果模态框、音效与排行榜逻辑、移动端专门优化。</p>
+		</section>
+
+		<section id="leaderboard" class="panel leaderboard">
+			<h2 class="panel-title">排行榜</h2>
+			<ol id="board-list" class="board-list"><li class="placeholder">暂无数据</li></ol>
+		</section>
+
+		<section id="game-area" class="game-area hidden" aria-label="游戏区域">
+			<div id="hud" class="hud">
+				<div id="timer" class="timer" aria-live="polite">00:05</div>
+				<div class="stats">
+					<span id="hits">0</span> 命中 /
+					<span id="misses">0</span> 失误 /
+					命中率 <span id="accuracy">0%</span>
+				</div>
+				<div class="controls">
+					<button id="pause-btn" class="btn btn-secondary">暂停</button>
+					<button id="resume-btn" class="btn btn-secondary hidden">继续</button>
+					<button id="restart-btn" class="btn btn-danger">重启</button>
+					<label class="switch">
+						<input id="sound-toggle" type="checkbox" checked />
+						<span>音效</span>
+					</label>
+				</div>
+			</div>
+		</section>
+		<div id="result-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+		<div id="result-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
+			<h3 id="result-title">本局结果</h3>
+			<div class="result-body">
+				<div>时长 <span id="result-duration">5s</span></div>
+				<div>命中 <span id="result-hits">0</span></div>
+				<div>失误 <span id="result-misses">0</span></div>
+				<div>命中率 <span id="result-accuracy">0%</span></div>
+				<div>评分 <span id="result-score">0</span></div>
+			</div>
+			<div class="result-actions">
+				<div class="save-row">
+					<label for="player-name">玩家名：</label>
+					<input id="player-name" type="text" maxlength="16" placeholder="玩家" />
+					<button id="save-score-btn" class="btn btn-primary">提交成绩</button>
+				</div>
+				<div class="buttons">
+					<button id="play-again-btn" class="btn btn-secondary">再来一局</button>
+					<button id="close-result-btn" class="btn">关闭</button>
+				</div>
+			</div>
+		</div>
+		<div id="pause-backdrop" class="modal-backdrop hidden" aria-hidden="true"></div>
+		<div id="pause-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+			<h3 id="pause-title">已暂停</h3>
+			<div class="result-actions">
+				<div class="buttons">
+					<button id="pause-continue-btn" class="btn btn-secondary">继续游戏</button>
+					<button id="pause-exit-btn" class="btn btn-danger">返回首页</button>
+				</div>
+			</div>
+		</div>
+	</main>
+
+	<audio id="sfx-hit" preload="auto"></audio>
+	<audio id="sfx-pop" preload="auto"></audio>
+	<script src="./script.js"></script>
+	<!-- 当前版本不包含音效与持久化排名 -->
+</body>
+<!--
+需求实现要点：
+- 面板：目标数、难度、主题、开始按钮
+- 动画：标题滑入、面板淡入、按钮闪烁、方块 pop/hit
+- 主题：黑绿（默认）、红灰、荧光
+- 游戏：开始后显示游戏区域，生成固定数量 48px 方块，点击 0.2s 后替换
+-->
+</html>
+
+
