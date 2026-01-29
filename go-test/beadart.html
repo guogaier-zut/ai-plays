@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeadArt Studio - 拼豆图纸生成器</title>
+    
+    <!-- 依赖 CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        
+        /* 动画 */
+        @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-in { animation: slideIn 0.3s ease-out forwards; }
+        
+        /* 裁剪容器 */
+        .cropper-view-box, .cropper-face { border-radius: 0; }
+        
+        /* 隐藏原生 range 样式优化 */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #f1f5f9; border-radius: 3px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #2563eb; cursor: pointer; margin-top: -6px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-slate-50 selection:bg-blue-100 text-slate-900 min-h-screen">
+
+    <!-- 裁剪弹窗 -->
+    <div id="cropperModal" class="fixed inset-0 z-[100] bg-slate-900/90 hidden items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl overflow-hidden w-full max-w-2xl shadow-2xl">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-xl font-black text-slate-800">裁剪图纸区域</h3>
+                <button onclick="closeCropper()" class="text-slate-400 hover:text-slate-600">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="relative h-[400px] w-full bg-slate-800">
+                <img id="cropperImage" src="" class="max-w-full block">
+            </div>
+            <div class="p-8 space-y-6">
+                <div class="flex gap-4">
+                    <button onclick="closeCropper()" class="flex-1 py-4 px-6 rounded-2xl font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 transition-all">取消</button>
+                    <button onclick="confirmCrop()" class="flex-[2] py-4 px-6 rounded-2xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-200 transition-all">确认裁剪</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 顶部导航 -->
+    <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-[60] h-20">
+        <div class="max-w-[1400px] mx-auto px-6 h-full flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">B</div>
+                <div class="hidden sm:block">
+                    <h1 class="text-xl font-black text-slate-800 tracking-tight">BeadArt Studio</h1>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest -mt-1">Pro Pattern Generator</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div id="controlsArea" class="hidden flex items-center gap-3">
+                    <div class="relative">
+                        <button onclick="toggleSettings()" id="settingsBtn" class="flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all border-2 bg-white border-slate-200 text-slate-600 hover:border-slate-300">
+                            <i data-lucide="sliders" class="w-4 h-4"></i>
+                            <span>配置图纸</span>
+                            <i data-lucide="chevron-down" id="settingsChevron" class="w-4 h-4 transition-transform"></i>
+                        </button>
+
+                        <div id="settingsPanel" class="absolute right-0 mt-3 w-80 bg-white rounded-[2rem] shadow-2xl border border-slate-100 p-8 z-[70] hidden animate-slide-in">
+                            <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">实时调节</h3>
+                            <div class="space-y-8">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-500 mb-3 uppercase tracking-tighter">画布规格</label>
+                                    <div class="grid grid-cols-2 gap-2" id="gridPresetGroup">
+                                        <button onclick="setGridSize(29)" class="grid-btn text-xs py-3 rounded-xl border-2 transition-all font-black bg-blue-600 border-blue-600 text-white shadow-lg" data-val="29">小 (29)</button>
+                                        <button onclick="setGridSize(58)" class="grid-btn text-xs py-3 rounded-xl border-2 transition-all font-black border-slate-100 text-slate-600 hover:border-slate-200 bg-slate-50" data-val="58">中 (58)</button>
+                                        <button onclick="setGridSize(80)" class="grid-btn text-xs py-3 rounded-xl border-2 transition-all font-black border-slate-100 text-slate-600 hover:border-slate-200 bg-slate-50" data-val="80">大 (80)</button>
+                                        <button onclick="setGridSize(120)" class="grid-btn text-xs py-3 rounded-xl border-2 transition-all font-black border-slate-100 text-slate-600 hover:border-slate-200 bg-slate-50" data-val="120">巨 (120)</button>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-slate-500 uppercase">对比度</span>
+                                        <span id="contrastVal" class="text-xs font-black text-blue-600">50%</span>
+                                    </div>
+                                    <input type="range" min="0" max="100" value="50" oninput="updateSetting('contrast', this.value)" class="w-full accent-blue-600">
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-slate-500 uppercase">亮度</span>
+                                        <span id="brightnessVal" class="text-xs font-black text-blue-600">50%</span>
+                                    </div>
+                                    <input type="range" min="0" max="100" value="50" oninput="updateSetting('brightness', this.value)" class="w-full accent-blue-600">
+                                </div>
+
+                                <div class="pt-6 space-y-4 border-t border-slate-50">
+                                    <div class="flex items-center justify-between group">
+                                        <span class="text-xs font-bold text-slate-400 group-hover:text-slate-700 transition-colors uppercase tracking-widest">抖动算法</span>
+                                        <button onclick="toggleSwitch('dithering')" id="ditheringToggle" class="w-11 h-6 rounded-full transition-all relative bg-blue-600">
+                                            <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform translate-x-5"></div>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between group">
+                                        <span class="text-xs font-bold text-slate-400 group-hover:text-slate-700 transition-colors uppercase tracking-widest">网格线</span>
+                                        <button onclick="toggleSwitch('showGrid')" id="showGridToggle" class="w-11 h-6 rounded-full transition-all relative bg-blue-600">
+                                            <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform translate-x-5"></div>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between group">
+                                        <span class="text-xs font-bold text-slate-400 group-hover:text-slate-700 transition-colors uppercase tracking-widest">色号标注</span>
+                                        <button onclick="toggleSwitch('showNumbers')" id="showNumbersToggle" class="w-11 h-6 rounded-full transition-all relative bg-slate-200">
+                                            <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transition-transform translate-x-0"></div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="triggerUpload()" class="bg-slate-900 text-white px-6 py-2.5 rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-100">
+                        <i data-lucide="plus" class="w-5 h-5"></i>
+                        <span class="hidden sm:inline">重新上传</span>
+                    </button>
+                </div>
+                <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="handleFile(event)">
+            </div>
+        </div>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="max-w-[1400px] mx-auto px-6 mt-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start pb-20">
+        <!-- 画布区 -->
+        <div id="canvasSection" class="lg:col-span-12 space-y-8">
+            <div id="emptyState" onclick="triggerUpload()" class="bg-white border-4 border-dashed border-slate-200 rounded-[4rem] min-h-[600px] flex flex-col items-center justify-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-all shadow-sm group">
+                <div class="w-24 h-24 bg-slate-50 rounded-[2rem] flex items-center justify-center text-slate-300 mb-8 shadow-inner group-hover:scale-110 group-hover:bg-blue-50 group-hover:text-blue-500 transition-all duration-500">
+                    <i data-lucide="image" class="w-12 h-12"></i>
+                </div>
+                <p class="text-2xl font-black text-slate-800">开始创作您的拼豆图纸</p>
+                <p class="text-slate-400 text-sm mt-3 font-medium">支持裁剪、实时参数调节、高精度转换</p>
+                <div class="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100 flex items-center gap-3">
+                    <i data-lucide="plus" class="w-6 h-6"></i>
+                    立即上传图片
+                </div>
+            </div>
+
+            <div id="editorArea" class="hidden relative flex flex-col">
+                <div id="loader" class="absolute inset-0 z-20 bg-white/60 backdrop-blur-md hidden items-center justify-center rounded-[3rem]">
+                    <div class="flex flex-col items-center gap-4">
+                        <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+                        <span class="text-xs font-black text-blue-600 uppercase tracking-widest">正在精炼色彩...</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-center border-4 border-slate-300 rounded-3xl bg-slate-100 p-4 shadow-2xl min-h-[400px] lg:min-h-[600px] w-full">
+                    <canvas id="mainCanvas" class="bg-white rounded shadow-2xl cursor-zoom-in" style="max-width: 100%; max-height: 75vh; height: auto; width: auto; object-fit: contain;"></canvas>
+                </div>
+
+                <button onclick="exportImage()" class="mt-8 w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black hover:bg-slate-800 transition-all flex items-center justify-center gap-3 shadow-2xl active:translate-y-1">
+                    <i data-lucide="download" class="w-6 h-6"></i>
+                    导出高清图纸
+                </button>
+            </div>
+        </div>
+
+        <!-- 侧边栏 (清单) -->
+        <div id="sidebar" class="hidden lg:col-span-3 h-full">
+            <div class="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 flex flex-col h-[700px] overflow-hidden">
+                <div class="mb-6">
+                    <h3 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                        材料清单
+                        <span id="totalBeadsCount" class="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">0</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-1 italic">点击色块在图纸中定位</p>
+                </div>
+                
+                <div id="inventoryList" class="flex-1 space-y-2 overflow-y-auto pr-2 custom-scrollbar">
+                    <!-- 动态生成 -->
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="text-slate-400">总包数估算:</span>
+                        <span id="totalPacks" class="font-bold text-slate-800">0 包</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer id="footer" class="hidden mt-20 py-10 text-center">
+        <p class="text-slate-300 text-[10px] font-black uppercase tracking-[0.3em]">BeadArt Studio Engine v2.0</p>
+    </footer>
+
+    <script>
+        // --- 数据定义 ---
+        const PERLER_PALETTE = [
+            { id: '1', name: 'White', zhName: '白色', hex: '#FFFFFF' },
+            { id: '2', name: 'Black', zhName: '黑色', hex: '#000000' },
+            { id: '3', name: 'Red', zhName: '红色', hex: '#E2222B' },
+            { id: '4', name: 'Orange', zhName: '橙色', hex: '#F26724' },
+            { id: '5', name: 'Yellow', zhName: '黄色', hex: '#FBC02D' },
+            { id: '6', name: 'Dark Green', zhName: '深绿色', hex: '#2A7F3F' },
+            { id: '7', name: 'Light Green', zhName: '浅绿色', hex: '#72BC45' },
+            { id: '8', name: 'Dark Blue', zhName: '深蓝色', hex: '#2D368C' },
+            { id: '9', name: 'Light Blue', zhName: '浅蓝色', hex: '#4197D1' },
+            { id: '10', name: 'Purple', zhName: '紫色', hex: '#774198' },
+            { id: '11', name: 'Pink', zhName: '粉色', hex: '#E7519B' },
+            { id: '12', name: 'Brown', zhName: '褐色', hex: '#654321' },
+            { id: '13', name: 'Tan', zhName: '浅褐', hex: '#D2B48C' },
+            { id: '14', name: 'Peach', zhName: '肤色', hex: '#FFCC99' },
+            { id: '15', name: 'Grey', zhName: '灰色', hex: '#9E9E9E' },
+            { id: '16', name: 'Cheddar', zhName: '切达黄', hex: '#FFA000' },
+            { id: '17', name: 'Kiwi Lime', zhName: '奇异果绿', hex: '#8BC34A' },
+            { id: '18', name: 'Parrot Green', zhName: '鹦鹉绿', hex: '#4CAF50' },
+            { id: '19', name: 'Turquoise', zhName: '绿松石色', hex: '#009688' },
+            { id: '20', name: 'Toothpaste', zhName: '薄荷绿', hex: '#B2DFDB' },
+            { id: '21', name: 'Sky Blue', zhName: '天蓝色', hex: '#81D4FA' },
+            { id: '22', name: 'Pastel Blue', zhName: '淡蓝色', hex: '#E1F5FE' },
+            { id: '23', name: 'Periwinkle Blue', zhName: '长春花蓝', hex: '#7986CB' },
+            { id: '24', name: 'Plum', zhName: '梅紫', hex: '#880E4F' },
+            { id: '25', name: 'Magenta', zhName: '洋红', hex: '#C2185B' },
+            { id: '26', name: 'Pastel Lavender', zhName: '薰衣草紫', hex: '#E1BEE7' },
+            { id: '27', name: 'Bubblegum', zhName: '泡泡糖粉', hex: '#F48FB1' },
+            { id: '28', name: 'Rust', zhName: '铁锈色', hex: '#A52A2A' },
+            { id: '29', name: 'Light Brown', zhName: '浅咖', hex: '#8D6E63' },
+            { id: '30', name: 'Sand', zhName: '沙色', hex: '#F5F5DC' },
+        ];
+
+        // --- 状态管理 ---
+        let state = {
+            image: null,
+            grid: [],
+            gridSize: 29,
+            dithering: true,
+            contrast: 50,
+            brightness: 50,
+            showGrid: true,
+            showNumbers: false,
+            highlightedColorId: null,
+            isProcessing: false
+        };
+
+        let cropper = null;
+
+        // --- 初始化 ---
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            
+            // 点击外部关闭设置
+            document.addEventListener('mousedown', (e) => {
+                const panel = document.getElementById('settingsPanel');
+                const btn = document.getElementById('settingsBtn');
+                if (!panel.contains(e.target) && !btn.contains(e.target)) {
+                    panel.classList.add('hidden');
+                    document.getElementById('settingsChevron').style.transform = '';
+                }
+            });
+        });
+
+        // --- 核心算法 ---
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 0, g: 0, b: 0 };
+        }
+
+        function getClosestBead(r, g, b) {
+            let minDist = Infinity;
+            let closest = PERLER_PALETTE[0];
+            for (const bead of PERLER_PALETTE) {
+                const brgb = hexToRgb(bead.hex);
+                // 加权感知距离
+                const dist = Math.sqrt(
+                    Math.pow((r - brgb.r) * 0.30, 2) +
+                    Math.pow((g - brgb.g) * 0.59, 2) +
+                    Math.pow((b - brgb.b) * 0.11, 2)
+                );
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = bead;
+                }
+            }
+            return closest;
+        }
+
+        async function processImage() {
+            if (!state.image) return;
+            showLoader(true);
+            
+            const size = state.gridSize;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = size;
+            canvas.height = size;
+            ctx.drawImage(state.image, 0, 0, size, size);
+
+            const imgData = ctx.getImageData(0, 0, size, size);
+            const data = new Float32Array(imgData.data);
+            const grid = [];
+            
+            const bFactor = (state.brightness - 50) * 2.5;
+            const cFactor = Math.pow((state.contrast + 100) / 100, 2);
+
+            const applySettings = (r, g, b) => {
+                r += bFactor; g += bFactor; b += bFactor;
+                r = (r - 128) * cFactor + 128;
+                g = (g - 128) * cFactor + 128;
+                b = (b - 128) * cFactor + 128;
+                return [Math.max(0, Math.min(255, r)), Math.max(0, Math.min(255, g)), Math.max(0, Math.min(255, b))];
+            };
+
+            if (state.dithering) {
+                for (let y = 0; y < size; y++) {
+                    const row = [];
+                    for (let x = 0; x < size; x++) {
+                        const i = (y * size + x) * 4;
+                        let [r, g, b] = applySettings(data[i], data[i+1], data[i+2]);
+                        const bead = getClosestBead(r, g, b);
+                        const brgb = hexToRgb(bead.hex);
+                        row.push({ color: bead });
+
+                        const errR = r - brgb.r;
+                        const errG = g - brgb.g;
+                        const errB = b - brgb.b;
+
+                        const distribute = (nx, ny, w) => {
+                            if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
+                                const ni = (ny * size + nx) * 4;
+                                data[ni] += errR * w; data[ni+1] += errG * w; data[ni+2] += errB * w;
+                            }
+                        };
+                        distribute(x+1, y, 7/16); distribute(x-1, y+1, 3/16);
+                        distribute(x, y+1, 5/16); distribute(x+1, y+1, 1/16);
+                    }
+                    grid.push(row);
+                }
+            } else {
+                for (let y = 0; y < size; y++) {
+                    const row = [];
+                    for (let x = 0; x < size; x++) {
+                        const i = (y * size + x) * 4;
+                        const [r, g, b] = applySettings(data[i], data[i+1], data[i+2]);
+                        row.push({ color: getClosestBead(r, g, b) });
+                    }
+                    grid.push(row);
+                }
+            }
+
+            state.grid = grid;
+            renderCanvas();
+            updateInventory();
+            showLoader(false);
+        }
+
+        function renderCanvas() {
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            const size = state.grid.length;
+            const cellSize = 30;
+            canvas.width = size * cellSize;
+            canvas.height = size * cellSize;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            state.grid.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    const px = x * cellSize, py = y * cellSize;
+                    const isHigh = state.highlightedColorId === null || cell.color.id === state.highlightedColorId;
+
+                    if (state.showGrid) {
+                        ctx.strokeStyle = 'rgba(200, 200, 200, 0.2)';
+                        ctx.lineWidth = 0.5;
+                        ctx.strokeRect(px, py, cellSize, cellSize);
+                    }
+
+                    ctx.save();
+                    if (!isHigh) ctx.globalAlpha = 0.1;
+                    
+                    // 豆子本体
+                    ctx.fillStyle = cell.color.hex;
+                    ctx.beginPath();
+                    ctx.arc(px + cellSize/2, py + cellSize/2, cellSize * 0.44, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 豆子孔
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.arc(px + cellSize/2, py + cellSize/2, cellSize * 0.15, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // 高光
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(px + cellSize * 0.35, py + cellSize * 0.35, cellSize * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 编号
+                    if (state.showNumbers && isHigh) {
+                        ctx.fillStyle = (cell.color.hex === '#FFFFFF' || cell.color.hex === '#F5F5DC') ? '#000000' : '#FFFFFF';
+                        ctx.font = `bold ${cellSize * 0.35}px Inter, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(cell.color.id, px + cellSize/2, py + cellSize/2);
+                    }
+                    ctx.restore();
+                });
+            });
+
+            // 5x5粗线网格
+            if (state.showGrid) {
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= size; i += 5) {
+                    ctx.beginPath(); ctx.moveTo(i * cellSize, 0); ctx.lineTo(i * cellSize, canvas.height); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i * cellSize); ctx.lineTo(canvas.width, i * cellSize); ctx.stroke();
+                }
+            }
+        }
+
+        // --- 交互逻辑 ---
+        function triggerUpload() { document.getElementById('fileInput').click(); }
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = document.getElementById('cropperImage');
+                img.src = ev.target.result;
+                document.getElementById('cropperModal').classList.remove('hidden');
+                document.getElementById('cropperModal').classList.add('flex');
+                
+                if (cropper) cropper.destroy();
+                cropper = new Cropper(img, { aspectRatio: 1, viewMode: 1 });
+            };
+            reader.readAsDataURL(file);
+            e.target.value = '';
+        }
+
+        function closeCropper() {
+            document.getElementById('cropperModal').classList.add('hidden');
+            document.getElementById('cropperModal').classList.remove('flex');
+        }
+
+        function confirmCrop() {
+            const canvas = cropper.getCroppedCanvas();
+            const img = new Image();
+            img.src = canvas.toDataURL();
+            img.onload = () => {
+                state.image = img;
+                state.highlightedColorId = null;
+                document.getElementById('emptyState').classList.add('hidden');
+                document.getElementById('editorArea').classList.remove('hidden');
+                document.getElementById('controlsArea').classList.remove('hidden');
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('canvasSection').classList.replace('lg:col-span-12', 'lg:col-span-9');
+                document.getElementById('footer').classList.remove('hidden');
+                processImage();
+                closeCropper();
+            };
+        }
+
+        function updateSetting(key, val) {
+            state[key] = parseInt(val);
+            document.getElementById(`${key}Val`).innerText = `${val}%`;
+            processImage();
+        }
+
+        function setGridSize(size) {
+            state.gridSize = size;
+            document.querySelectorAll('.grid-btn').forEach(btn => {
+                if (parseInt(btn.dataset.val) === size) {
+                    btn.classList.add('bg-blue-600', 'border-blue-600', 'text-white', 'shadow-lg');
+                    btn.classList.remove('border-slate-100', 'text-slate-600', 'hover:border-slate-200', 'bg-slate-50');
+                } else {
+                    btn.classList.remove('bg-blue-600', 'border-blue-600', 'text-white', 'shadow-lg');
+                    btn.classList.add('border-slate-100', 'text-slate-600', 'hover:border-slate-200', 'bg-slate-50');
+                }
+            });
+            processImage();
+        }
+
+        function toggleSwitch(key) {
+            state[key] = !state[key];
+            const btn = document.getElementById(`${key}Toggle`);
+            const dot = btn.querySelector('div');
+            if (state[key]) {
+                btn.classList.replace('bg-slate-200', 'bg-blue-600');
+                dot.classList.replace('translate-x-0', 'translate-x-5');
+            } else {
+                btn.classList.replace('bg-blue-600', 'bg-slate-200');
+                dot.classList.replace('translate-x-5', 'translate-x-0');
+            }
+            if (key === 'dithering') processImage();
+            else renderCanvas();
+        }
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            const chevron = document.getElementById('settingsChevron');
+            const isOpen = !panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+        }
+
+        function updateInventory() {
+            const countsMap = new Map();
+            state.grid.flat().forEach(cell => {
+                const id = cell.color.id;
+                const existing = countsMap.get(id) || { color: cell.color, count: 0 };
+                countsMap.set(id, { ...existing, count: existing.count + 1 });
+            });
+
+            const sorted = Array.from(countsMap.values()).sort((a, b) => b.count - a.count);
+            const list = document.getElementById('inventoryList');
+            list.innerHTML = '';
+
+            let totalCount = 0;
+            let totalPacks = 0;
+
+            sorted.forEach(({ color, count }) => {
+                totalCount += count;
+                const packs = Math.ceil(count / 1000);
+                totalPacks += packs;
+                const isActive = state.highlightedColorId === color.id;
+
+                const item = document.createElement('div');
+                item.className = `group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border-2 ${isActive ? 'bg-blue-50 border-blue-500 scale-[1.02] shadow-md' : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200 hover:shadow-sm'}`;
+                item.onclick = () => {
+                    state.highlightedColorId = isActive ? null : color.id;
+                    updateInventory();
+                    renderCanvas();
+                };
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <div class="w-10 h-10 rounded-full shadow-inner border-2 border-white" style="background-color: ${color.hex}"></div>
+                            <div class="absolute -top-1 -left-1 bg-white border border-slate-200 text-[10px] font-black px-1 rounded shadow-sm">${color.id}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-slate-800">${color.zhName}</div>
+                            <div class="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">${color.name}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-black ${isActive ? 'text-blue-600' : 'text-slate-700'}">${count} <span class="text-[10px] opacity-50 font-normal">PCS</span></div>
+                        <div class="text-[10px] text-slate-400">${packs} 包 (1k装)</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+
+            document.getElementById('totalBeadsCount').innerText = totalCount;
+            document.getElementById('totalPacks').innerText = `${totalPacks} 包`;
+        }
+
+        function exportImage() {
+            const canvas = document.getElementById('mainCanvas');
+            const link = document.createElement('a');
+            link.download = `beadart-${state.gridSize}x${state.gridSize}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function showLoader(show) {
+            document.getElementById('loader').classList.toggle('hidden', !show);
+            document.getElementById('loader').classList.toggle('flex', show);
+        }
+    </script>
+</body>
+</html>
